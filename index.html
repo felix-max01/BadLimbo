@@ -544,8 +544,8 @@ function buildNest() {
   lv.levers.push({ x: 1100, y: 380, kind: 'drop', target: 0, on: false, ang: 0, seg: 0 });
   lv.levers.push({ x: 3350, y: 650, kind: 'saw', on: false, ang: 0, seg: 0 });
   lv.puddles.push({ x: 1500, w: 220, y: 698, h: 12, elec: 0, used: false });
-  lv.saws.push({ kind: 'fixed', boss: true, r: 70, ax: 2900, bx: 2900, y: 640, x: 2900, hx: 2900, stopX: 2400, rot: 0, period: 1, phase: 0, released: false, dead: false, seg: 3 });
-  lv.ropes.push({ ax: 2780, ay: 120, len: 400, baseA: 0.5, ph: 0 });
+  lv.saws.push({ kind: 'fixed', boss: true, r: 70, ax: 2900, bx: 2900, y: 675, x: 2900, hx: 2900, stopX: 2400, rot: 0, period: 1, phase: 0, released: false, dead: false, seg: 3 });
+  lv.ropes.push({ ax: 2780, ay: 120, len: 440, baseA: 0.5, ph: 0, grab: 48 });
   lv.bossCps = [{ seg: 0, stage: 0 }, { seg: 2, stage: 2, gy: 710, sx: 1700, face: -1, minX: 1570, maxX: 1e9 },
                 { seg: 3, stage: 3, gy: 710, sx: 1300, face: 1, minX: -1e9, maxX: 2720 }];
   lv.spider = makeBoss({ x: 1700, y: 250 });
@@ -1190,7 +1190,7 @@ function tryAttachRope() {
     if (r === P.lastRope && simT < P.lastRopeT) continue;
     const e = ropeEnd(r), x0 = r.ax + (e.x - r.ax) * 0.5, y0 = r.ay + (e.y - r.ay) * 0.5;
     const vx = e.x - x0, vy = e.y - y0, t = clamp(((hx - x0) * vx + (hy - y0) * vy) / (vx * vx + vy * vy), 0, 1);
-    if (Math.hypot(hx - (x0 + vx * t), hy - (y0 + vy * t)) < 34) {
+    if (Math.hypot(hx - (x0 + vx * t), hy - (y0 + vy * t)) < (r.grab || 34)) {
       P.rope = r; P.held = null;
       if (P.crouch) { P.crouch = false; P.h = PH; }
       Aud.creak();
