@@ -392,6 +392,8 @@ function finish2(lv) {
   for (const r of lv.ropes) { r.seg = segOf(lv, r.ax); r.A = r.baseA; r.th = r.A * Math.sin(r.ph); r.om = 0; r.Om = Math.sqrt(900 / r.len); }
   for (const h of lv.hsw) h.seg = segOf(lv, h.x);
   for (const v of lv.vents) v.seg = segOf(lv, v.x);
+  // vento reinicia junto com o interruptor que o controla (evita vento ligado/desligado fora de sincronia ao morrer)
+  for (const v of lv.vents) { const h = lv.hsw.find(q => q.target === v.id); if (h) v.seg = h.seg; }
   for (const k of lv.blockers) k.seg = segOf(lv, k.x);
   return lv;
 }
@@ -458,7 +460,7 @@ function buildTower() {
   st.push({ x: 900, y: 380, w: 300, h: 320 });            // B
   st.push({ x: 1950, y: 380, w: 250, h: 320 });            // C
   st.push({ x: 2600, y: 380, w: 350, h: 320 });            // D
-  st.push({ x: 3300, y: 380, w: 900, h: 320 });            // E (saída)
+  st.push({ x: 3200, y: 380, w: 1000, h: 320 });           // E (saída)
   lv.checkpoints = [
     { x: 0, sx: 60, sy: 380 }, { x: 910, sx: 920, sy: 380 }, { x: 1960, sx: 1970, sy: 380 }, { x: 2610, sx: 2620, sy: 380 }
   ];
@@ -468,7 +470,7 @@ function buildTower() {
   lv.ropes.push({ ax: 2420, ay: 60, len: 240, baseA: 0.7, ph: 0 });
   lv.hsw.push({ x: 2560, y: 250, on: false, target: 'v1' });
   lv.vents.push({ id: 'v1', kind: 'lift', x: 2850, y: 90, w: 100, h: 290, ax: 0, ay: -3300, vmax: 0, vy: 560, on: false });
-  lv.vents.push({ id: 'v1', kind: 'wind', x: 2950, y: 70, w: 340, h: 280, ax: 700, ay: -900, vmax: 380, vy: 560, on: false });
+  lv.vents.push({ id: 'v1', kind: 'wind', x: 2950, y: -100, w: 270, h: 450, ax: 700, ay: -900, vmax: 380, vy: 560, on: false });
   lv.endX = 3800;
   return finish2(lv);
 }
@@ -1247,6 +1249,7 @@ function ik(ax, ay, tx, ty) {
   return { kx: ax + ux * dm * (a / dm) + px * h, ky: ay + uy * a + py * h, ex: ax + ux * dm, ey: ay + uy * dm };
 }
 function spLegRest(sp) {
+  sp.lift = 0;
   sp.legs = [];
   for (let i = 0; i < 8; i++) sp.legs.push({ fx: sp.x + SP_RX[i] * sp.face * (sp.phase === 'chase' || sp.boss ? 0.8 : 1), fy: sp.gy || 380, step: -1, sx: 0, tx: 0, st: 'plant' });
 }
@@ -1282,6 +1285,23 @@ function spiderKill() {
   if (sp.phase === 'chase' && P.x < sp.x + 130 && P.x + PW > sp.x - 90) die('spider');
   if (sp.boss && sp.bp === 'fight' && Math.abs(P.x + PW / 2 - sp.x) < 62 && Math.abs(P.y + P.h / 2 - sp.y) < 110) die('spider');
 }
+/* colisão sólida aranha × caixas: ela sobe na caixa e passa por cima */
+function spBoxTop(sp, x0, x1, G) {
+  let top = G;
+  for (const b of lv.boxes) {
+    if (b.dead || b.hung || b.g < 0) continue;
+    if (b.y + b.h < G - 50 || b.y + b.h > G + 40) continue;     // só caixas apoiadas no chão da aranha
+    if (b.x < x1 && b.x + b.w > x0 && b.y < top) top = b.y;
+  }
+  return top;
+}
+function spLift(sp, dt) {
+  const G = sp.gy || 380, tgt = G - spBoxTop(sp, sp.x - 85, sp.x + 85, G);
+  if (sp.lift === undefined) sp.lift = 0;
+  sp.lift += (tgt - sp.lift) * Math.min(1, dt * (tgt > sp.lift ? 10 : 6));
+  if (Math.abs(tgt - sp.lift) < 0.05) sp.lift = tgt;
+  return sp.lift;
+}
 function spiderLegs(sp, dt) {
   const chase = sp.phase === 'chase' || !!sp.boss, G = sp.gy || 380;
   let stepping = 0; for (const l of sp.legs) if (l.step >= 0) stepping++;
@@ -1291,9 +1311,13 @@ function spiderLegs(sp, dt) {
     const rx = sp.x + SP_RX[i] * sp.face * (chase ? 0.8 : 1);
     if (l.step >= 0) {
       l.step += dt / (chase ? 0.15 : 0.3);
-      if (l.step >= 1) { l.step = -1; l.fx = l.tx; l.fy = G; }
-      else { l.fx = l.sx + (l.tx - l.sx) * l.step; l.fy = G - Math.sin(l.step * Math.PI) * (chase ? 60 : 42); }
-    } else if (sp.phase !== 'wound' && Math.abs(l.fx - rx) > (chase ? 30 : 70) && stepping < 4) {
+      const gt = spBoxTop(sp, l.tx - 4, l.tx + 4, G);
+      if (l.step >= 1) { l.step = -1; l.fx = l.tx; l.fy = gt; }
+      else { l.fx = l.sx + (l.tx - l.sx) * l.step; l.fy = Math.min(G, gt) - Math.sin(l.step * Math.PI) * (chase ? 60 : 42) - (G - gt) * 0.0; }
+    } else if (chase && l.st === 'plant') {
+      const gp = spBoxTop(sp, l.fx - 4, l.fx + 4, G); if (gp < G || l.fy < G) l.fy = gp;
+    }
+    if (l.step < 0 && sp.phase !== 'wound' && Math.abs(l.fx - rx) > (chase ? 30 : 70) && stepping < 4) {
       l.step = 0; l.sx = l.fx; l.tx = rx + sp.vx * 0.12; stepping++;
     }
   }
@@ -1375,7 +1399,7 @@ function updateSpider(dt) {
       spLegRest(sp); Aud.screech(); sp.shake = 1;
     }
   } else if (sp.phase === 'chase') {
-    sp.y = sp.cy + Math.sin(sp.t * 9) * 4;
+    sp.y = sp.cy + Math.sin(sp.t * 9) * 4 - spLift(sp, dt);
     if (state === 'play' || state === 'dead') {
       const run = sp.x < sp.stopX;
       sp.vx = run ? sp.speed : 0;
@@ -1502,7 +1526,7 @@ function updateBoss(dt) {
     const des = clamp(P.x - dir * sp.stand, sp.minX, sp.maxX);
     const dx = clamp(des - sp.x, -sp.speed * dt, sp.speed * dt);
     sp.x += dx; sp.vx = dx / dt;
-    sp.y = G - 130 + Math.sin(sp.t * 2.2) * 5;
+    sp.y = G - 130 + Math.sin(sp.t * 2.2) * 5 - spLift(sp, dt);
     if (sp.atk) spiderAttackStep(sp, dt);
     else {
       sp.cool -= dt;
@@ -1529,7 +1553,7 @@ function updateBoss(dt) {
     if (playing && sp.stage === 3 && P.x > lv.sawX) sp.maxX = Math.min(sp.maxX, lv.sawX - 190);
   } else if (sp.bp === 'stun') {
     sp.vx = 0; sp.stunT -= dt; sp.shake = Math.max(sp.shake, 0.45);
-    sp.y = G - 130 + Math.sin(sp.t * 28) * 4;
+    sp.y = G - 130 + Math.sin(sp.t * 28) * 4 - spLift(sp, dt);
     spiderLegs(sp, dt);
     if (sp.stunT <= 0) {
       if (sp.next === 'smash') {
@@ -2866,16 +2890,17 @@ function drawEndFim() {
   ctx.globalAlpha = a; ctx.textAlign = 'center';
   ctx.fillStyle = '#111';
   ctx.font = (H * 0.2) + 'px Georgia, serif';
-  spacedText('FIM', W / 2, H * 0.4, H * 0.03);
+  ctx.textBaseline = 'alphabetic';
+  spacedText('FIM', W / 2, H * 0.315, H * 0.03);
   ctx.font = (H * 0.034) + 'px Georgia, serif'; ctx.fillStyle = '#333';
   const lines = ['b a d - l i m b o', '', 'um jogo de silêncio, luz e sombra', 'feito em HTML, Canvas e Web Audio', '', 'obrigado por atravessar'];
-  lines.forEach((t, i) => { if (t) spacedText(t, W / 2, H * (0.52 + i * 0.055), H * 0.004); });
+  lines.forEach((t, i) => { if (t) spacedText(t, W / 2, H * (0.435 + i * 0.05), H * 0.004); });
   if (endT > 3.5) {
-    const bw = W * 0.26, bh = H * 0.09, bx = W / 2 - bw / 2, by = H * 0.87;
+    const bw = W * 0.26, bh = H * 0.09, bx = W / 2 - bw / 2, by = H * 0.74;
     ctx.globalAlpha = a * (0.7 + 0.3 * Math.sin(time * 3));
     ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
     ctx.fillStyle = '#222'; ctx.font = (H * 0.04) + 'px sans-serif';
-    ctx.fillText('↻  JOGAR DE NOVO', W / 2, by + bh * 0.64);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('↻  JOGAR NOVAMENTE', W / 2, by + bh / 2); ctx.textBaseline = 'alphabetic';
   }
   ctx.globalAlpha = 1;
 }
