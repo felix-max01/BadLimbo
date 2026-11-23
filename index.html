@@ -2893,10 +2893,10 @@ function drawEndFim() {
   ctx.textBaseline = 'alphabetic';
   spacedText('FIM', W / 2, H * 0.315, H * 0.03);
   ctx.font = (H * 0.034) + 'px Georgia, serif'; ctx.fillStyle = '#333';
-  const lines = ['b a d - l i m b o', '', 'um jogo de silêncio, luz e sombra', 'feito em HTML, Canvas e Web Audio', '', 'obrigado por atravessar'];
-  lines.forEach((t, i) => { if (t) spacedText(t, W / 2, H * (0.435 + i * 0.05), H * 0.004); });
+  const lines = ['b a d - l i m b o', '', 'um jogo de silêncio, luz e sombra', 'feito em HTML, Canvas e Web Audio', 'feito por © Felix Oliveira', '', 'obrigado!!!'];
+  lines.forEach((t, i) => { if (t) spacedText(t, W / 2, H * (0.42 + i * 0.047), H * 0.004); });
   if (endT > 3.5) {
-    const bw = W * 0.26, bh = H * 0.09, bx = W / 2 - bw / 2, by = H * 0.74;
+    const bw = W * 0.26, bh = H * 0.09, bx = W / 2 - bw / 2, by = H * 0.765;
     ctx.globalAlpha = a * (0.7 + 0.3 * Math.sin(time * 3));
     ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
     ctx.fillStyle = '#222'; ctx.font = (H * 0.04) + 'px sans-serif';
